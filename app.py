@@ -73,7 +73,7 @@
 #     app.run(host='127.0.0.1', port=8000, debug=True)
 
 from flask import Flask, render_template, request, redirect, flash
-from flask_login import LoginManager, login_user
+from flask_login import LoginManager, login_user, logout_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import User
 
@@ -133,6 +133,14 @@ def login():
         flash("認証に失敗しました")
 
     return render_template("login.html")
+
+
+# ログアウト処理
+@app.route("/logout")
+def logout():
+    logout_user()
+    flash("ログアウトしました！")
+    return redirect("/")
 
 
 @app.route("/")
