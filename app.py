@@ -72,10 +72,10 @@
 # if __name__ == '__main__':
 #     app.run(host='127.0.0.1', port=8000, debug=True)
 
-from flask import Flask, render_template, request, redirect, flash
-from flask_login import LoginManager, login_user, logout_user
+from flask import Flask, render_template, request, redirect, flash, url_for
+from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
-from config import User
+from config import User, Message
 
 app = Flask(__name__)
 app.secret_key = "secret"
@@ -88,6 +88,12 @@ login_manager.init_app(app)
 @login_manager.user_loader
 def load_user(user_id):
     return User.get_by_id(user_id)
+
+
+# ログインしていないとアクセスできないページにアクセスがあった場合の処理
+@login_manager.unauthorized_handler
+def unauthorized_handler():
+    return redirect(url_for("login"))
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -127,7 +133,7 @@ def login():
         if user is not None and check_password_hash(user.password, request.form["password"]):
             login_user(user)
             flash(f"ようこそ{user.name}さん")
-            return redirect("/")
+            return redirect(url_for("index"))
 
         # だめだったとき
         flash("認証に失敗しました")
@@ -137,15 +143,42 @@ def login():
 
 # ログアウト処理
 @app.route("/logout")
+@login_required
 def logout():
     logout_user()
     flash("ログアウトしました！")
-    return redirect("/")
+    return redirect(url_for("index"))
 
 
-@app.route("/")
+# ユーザー削除処理
+@app.route("/unregister")
+@login_required
+def unregister():
+    current_user.delete_instance()
+    logout_user()
+    return redirect(url_for("index"))
+
+# # メッセージ登録フォームの表示・投稿・一覧表示
+@app.route("/", methods=["GET", "POST"])
 def index():
-    return render_template("index.html")
+    if request.method == "POST" and current_user.is_authenticated:
+        Message.create(user=current_user, content=request.form["content"])
+    messages = (
+        Message.select()
+        .where(Message.reply_to.is_null(True))
+        .order_by(Message.pub_date.desc(), Message.id.desc())
+    )
+    return render_template("index.html", messages=messages)
+
+# メッセージ削除
+@app.route("/message/<message_id>/delete/", methods=["POST"])
+@login_required
+def delete(message_id):
+    if Message.select().where((Message.id == message_id) & (Message.user == current_user)).first():
+        Message.delete_by_id(message_id)
+    else:
+        flash("無効な操作です")
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":
